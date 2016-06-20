@@ -17,7 +17,11 @@ require 'socket'
 include Sensu::Plugin::Utils
 
 class CheckSilenced < Sensu::Plugin::Metric::CLI::Graphite
-  default_host = settings['api']['host'] rescue 'localhost' # rubocop:disable RescueModifier
+  default_host = begin
+                   settings['api']['host']
+                 rescue
+                   'localhost'
+                 end
 
   option :host,
          short: '-h HOST',
@@ -57,7 +61,12 @@ class CheckSilenced < Sensu::Plugin::Metric::CLI::Graphite
 
   def api
     endpoint = URI.parse("http://#{@config[:host]}:#{@config[:port]}")
-    @config[:use_ssl?] ? endpoint.scheme = 'https' : endpoint.scheme = 'http'
+    endpoint.scheme = if @config[:use_ssl?]
+                        'https'
+                      else
+                        'http'
+                      end
+    endpoint.scheme = (@config[:use_ssl?] ? 'https' : 'http')
     @api ||= RestClient::Resource.new(endpoint, timeout: 45)
   end
 
@@ -65,7 +74,7 @@ class CheckSilenced < Sensu::Plugin::Metric::CLI::Graphite
     all_stashes = JSON.parse(api['/stashes'].get)
     filtered_stashes = []
     all_stashes.each do |stash|
-      filtered_stashes << stash if stash['path'].match(/^#{@config[:filter]}\/.*/)
+      filtered_stashes << stash if stash['path'] =~ /^#{@config[:filter]}\/.*/
     end
     return filtered_stashes
   rescue Errno::ECONNREFUSED
